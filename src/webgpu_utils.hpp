@@ -1,43 +1,36 @@
 #ifndef _WEBGPU_UTILS_H
 #define _WEBGPU_UTILS_H
 
-#include <webgpu/webgpu.h>
-#ifdef WEBGPU_BACKEND_WGPU
-#  include <webgpu/wgpu.h>
-#endif // WEBGPU_BACKEND_WGPU
+#include <webgpu/webgpu.hpp>
+
+#include <string>
+#include <string_view>
 
 // Define string literal for WGPUStringView
-WGPUStringView operator""_wgpu(const char* str, size_t len);
+wgpu::StringView operator""_wgpu(const char* str, size_t len);
+
+wgpu::StringView chars_to_wgpu(const char* str);
+
+// Utility to laod shader file  
+std::string readShaderFile(std::string_view name);
 
 // Devise error callback
 void onDeviceError(
-    WGPUDevice const* /* pDevice */, WGPUErrorType type, 
+    WGPUDevice const* device, WGPUErrorType type, 
     WGPUStringView message, 
-    WGPU_NULLABLE void* /* pUserData */, WGPU_NULLABLE void* /* pUserData */
+    void* userdata1, void* userdata2
 );
 
 void onDeviceLost(
-    WGPUDevice const* /* pDevice */, WGPUDeviceLostReason reason, 
+    WGPUDevice const* device, WGPUDeviceLostReason reason, 
     WGPUStringView message, 
-    WGPU_NULLABLE void* /* pUserData */, WGPU_NULLABLE void* /* pUserData */
+    void* userdata1, void* userdata2
 );
-
-void onQueueWorkDone(
-    WGPUQueueWorkDoneStatus status, 
-    WGPU_NULLABLE void* /* pUserData1 */,
-    WGPU_NULLABLE void* /* pUserData2 */
-);
-
-// Utility function to request a WebGPU adapter
-WGPUAdapter requestAdapterSync(WGPUInstance instance, WGPURequestAdapterOptions const * options);
-
-// Utility function to request a WebGPU device
-WGPUDevice requestDeviceSync(WGPUAdapter adapter, WGPUDeviceDescriptor const * descriptor);
 
 // Utility function to inspect a WebGPU adapter
-void inspectAdapter(WGPUAdapter adapter);
+void inspectAdapter(wgpu::Adapter adapter);
 
 // Utility function to inspect a WebGPU device
-void inspectDevice(WGPUDevice device);
+void inspectDevice(wgpu::Device device);
 
 #endif // _WEBGPU_UTILS_H

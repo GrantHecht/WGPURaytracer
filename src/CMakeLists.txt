@@ -2,6 +2,7 @@
 add_executable(App 
     app.cpp
     webgpu_utils.cpp
+    webgpu_impl.cpp
     main.cpp
 )
 
@@ -28,6 +29,14 @@ target_link_libraries(App
         webgpu
         glfw
         glfw3webgpu
+)
+
+# Copy shaders
+add_custom_command(
+    TARGET App POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders
+    $<TARGET_FILE_DIR:App>/shaders
 )
 
 # Set extra printing

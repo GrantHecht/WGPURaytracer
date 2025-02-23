@@ -102,8 +102,10 @@ if (NOT TARGET webgpu)
 
         FetchContent_MakeAvailable(wgpu_native_prebuilt_release wgpu_native_prebuilt_debug)
 
-        # Create an imported target for the prebuild library
+        # Create an imported target for the prebuilt library
         add_library(webgpu SHARED IMPORTED GLOBAL)
+
+        target_compile_definitions(webgpu INTERFACE WEBGPU_BACKEND_WGPU)
 
         if(WIN32)
             set(WGPU_LIB_NAME "wgpu_native.dll")
@@ -118,6 +120,24 @@ if (NOT TARGET webgpu)
             IMPORTED_LOCATION_RELEASE "${wgpu_native_prebuilt_release_SOURCE_DIR}/lib/${WGPU_LIB_NAME}"
             INTERFACE_INCLUDE_DIRECTORIES "${wgpu_native_prebuilt_release_SOURCE_DIR}/include"
         )
+
+        # Build C++ header
+        set(py_cmd, "${CMAKE_CURRENT_SOURCE_DIR}/../utils/WebGPU-Cpp/generate.py -u ${wgpu_native_prebuilt_release_SOURCE_DIR}/include/webgpu.h -u ${wgpu_native_prebuilt_release_SOURCE_DIR}/include/wgpu.h -o ${wgpu_native_prebuilt_release_SOURCE_DIR}/include")
+        add_custom_command(
+            OUTPUT "${wgpu_native_prebuilt_release_SOURCE_DIR}/include/webgpu/webgpu.hpp"
+            COMMAND pip install lxml
+            COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/../utils/WebGPU-Cpp/fetch_default_values.py
+                -d ${CMAKE_CURRENT_SOURCE_DIR}/../utils/WebGPU-Cpp/defaults.txt
+            COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/../utils/WebGPU-Cpp/generate.py 
+                -u ${wgpu_native_prebuilt_release_SOURCE_DIR}/include/webgpu/webgpu.h
+                -u ${wgpu_native_prebuilt_release_SOURCE_DIR}/include/webgpu/wgpu.h
+                -o ${wgpu_native_prebuilt_release_SOURCE_DIR}/include/webgpu/webgpu.hpp
+        )
+        add_custom_target(
+            webgpu-cpp-header
+            DEPENDS "${wgpu_native_prebuilt_release_SOURCE_DIR}/include/webgpu/webgpu.hpp"
+        )
+        add_dependencies(webgpu webgpu-cpp-header)
 
 	elseif (WEBGPU_BACKEND_U STREQUAL "DAWN")
 

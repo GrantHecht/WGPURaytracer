@@ -1,0 +1,3 @@
+[submodule "utils/WebGPU-Cpp"]
+	path = utils/WebGPU-Cpp
+	url = https://github.com/eliemichel/WebGPU-Cpp.git

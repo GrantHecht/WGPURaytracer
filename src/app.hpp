@@ -1,11 +1,7 @@
 #ifndef _APP_H
 #define _APP_H
 
-#include <webgpu/webgpu.h>
-#ifdef WEBGPU_BACKEND_WGPU
-#  include <webgpu/wgpu.h>
-#endif // WEBGPU_BACKEND_WGPU
-
+#include <webgpu/webgpu.hpp>
 #include <GLFW/glfw3.h>
 
 class Application {
@@ -23,10 +19,24 @@ public:
     bool IsRunning();
 
 private:
+    // App configuration
+    void CreateWindow(); 
+    wgpu::Instance CreateInstance();
+    wgpu::Adapter RequestAdapter(wgpu::Instance instance);
+    void RequestDevice(wgpu::Adapter adapter);
+    void ConfigureSurface(wgpu::Instance instance, wgpu::Adapter adapter);
+    void InitializePipline();
+
+    wgpu::ShaderModule LoadShaderModule();
+    wgpu::TextureView GetNextSurfaceTextureView();
+
+private:
     GLFWwindow *window;
-    WGPUDevice device;
-    WGPUQueue queue;
-    WGPUSurface surface;
+    wgpu::Device device;
+    wgpu::Surface surface;
+    wgpu::Queue queue;
+    wgpu::RenderPipeline pipeline;
+    wgpu::TextureFormat surfaceFormat = wgpu::TextureFormat::Undefined;
 };
 
 #endif // _APP_H
