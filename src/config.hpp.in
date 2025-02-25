@@ -1,0 +1,21 @@
+#ifndef _CONFIG_H
+#define _CONFIG_H
+
+#include <cstddef>
+
+static constexpr float PI = 3.14159265358979323846f;
+
+namespace config {
+
+    static constexpr size_t initial_width = 640;
+
+    static constexpr size_t initial_height = 480;
+
+    static constexpr const char* shapeModelFile = "@RESOURCE_DIR@/fourareen.obj";
+
+    static constexpr const char* textureFile = "@RESOURCE_DIR@/fourareen2K_albedo.jpg";
+
+    static constexpr const char* shaderSrcFile = "@SHADER_DIR@/shader.wgsl";
+
+}
+#endif // _CONFIG_H

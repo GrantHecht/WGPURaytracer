@@ -22,29 +22,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-include(FetchContent)
-
 set(WEBGPU_BACKEND "WGPU" CACHE STRING "Backend implementation of WebGPU. Possible values are EMSCRIPTEN, WGPU, WGPU_STATIC and DAWN (it does not matter when using emcmake)")
-
-# FetchContent's GIT_SHALLOW option is buggy and does not actually do a shallow
-# clone. This macro takes care of it.
-macro(FetchContent_DeclareShallowGit Name GIT_REPOSITORY GitRepository GIT_TAG GitTag)
-	FetchContent_Declare(
-		"${Name}"
-
-		# This is what it'd look line if GIT_SHALLOW was indeed working:
-		#GIT_REPOSITORY "${GitRepository}"
-		#GIT_TAG        "${GitTag}"
-		#GIT_SHALLOW    ON
-
-		# Manual download mode instead:
-		DOWNLOAD_COMMAND
-			cd "${FETCHCONTENT_BASE_DIR}/${Name}-src" &&
-			git init &&
-			git fetch --depth=1 "${GitRepository}" "${GitTag}" &&
-			git reset --hard FETCH_HEAD
-	)
-endmacro()
 
 if (NOT TARGET webgpu)
 	string(TOUPPER ${WEBGPU_BACKEND} WEBGPU_BACKEND_U)

@@ -3,16 +3,10 @@
 
 #include <webgpu/webgpu.hpp>
 
-#include <string>
-#include <string_view>
-
 // Define string literal for WGPUStringView
 wgpu::StringView operator""_wgpu(const char* str, size_t len);
 
 wgpu::StringView chars_to_wgpu(const char* str);
-
-// Utility to laod shader file  
-std::string readShaderFile(std::string_view name);
 
 // Devise error callback
 void onDeviceError(

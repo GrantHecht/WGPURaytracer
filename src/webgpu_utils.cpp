@@ -1,10 +1,10 @@
 
 #include "webgpu_utils.hpp"
 
-#include <iostream>
-#include <fstream>
-#include <vector>
+#include <string_view>
 #include <cassert>
+
+#include <magic_enum/magic_enum.hpp>
 
 // Some string view utilities
 wgpu::StringView operator""_wgpu(const char* str, size_t len) {
@@ -15,23 +15,6 @@ wgpu::StringView operator""_wgpu(const char* str, size_t len) {
 wgpu::StringView chars_to_wgpu(const char* str) {
     return {std::string_view{str}};
 };
-
-std::string readShaderFile(std::string_view name) {
-    std::ifstream file(name.data(), std::ios::binary);
-    assert(file);
-
-    // Seek end of file to determine its size
-    file.seekg(0, std::ios::end);
-    std::string contents;
-    contents.resize(file.tellg());
-    file.seekg(0, std::ios::beg);
-
-    // Read contents into string
-    file.read(&contents[0], contents.size());
-    file.close();
-
-    return contents;
-}
 
 // Device error callback
 void onDeviceError(
@@ -70,6 +53,8 @@ void inspectAdapter(wgpu::Adapter adapter) {
         std::cout << " - maxTextureDimension2D: " << supportedLimits.maxTextureDimension2D << std::endl;
         std::cout << " - maxTextureDimension3D: " << supportedLimits.maxTextureDimension3D << std::endl;
         std::cout << " - maxTextureArrayLayers: " << supportedLimits.maxTextureArrayLayers << std::endl;
+        std::cout << " - maxVertexAttributes:   " << supportedLimits.maxVertexAttributes << std::endl;
+        std::cout << " - maxBufferSize:         " << supportedLimits.maxBufferSize << std::endl;
     }
     std::cout << std::endl;
     
@@ -78,26 +63,18 @@ void inspectAdapter(wgpu::Adapter adapter) {
     adapter.getFeatures(&features);
 
     std::cout << "Adapter features:" << std::endl;
-    std::cout << std::hex; // Write integers as hexadecimal to ease comparison with webgpu.h literals
-    for (size_t i = 0; i < features.featureCount; i++) 
-        std::cout << " - 0x" << features.features[i] << std::endl;
-
-    std::cout << std::dec; // Restore decimal numbers
+    std::string feature_name;
+    for (size_t i = 0; i < features.featureCount; i++) {
+        feature_name = magic_enum::enum_name(features.features[i]);
+        if (!feature_name.empty())
+            std::cout << feature_name << std::endl;
+    }
     std::cout << std::endl;
 };
 
 // inspect device function:
 void inspectDevice(wgpu::Device device) {
-    wgpu::SupportedFeatures features{};
-    device.getFeatures(&features);
-
-    std::cout << "Device features:" << std::endl;
-    std::cout << std::hex;
-    for (size_t i = 0; i < features.featureCount; i++) {
-        std::cout << " - 0x" << features.features[i] << std::endl;
-    }
-    std::cout << std::dec;
-
+    // Get device limits
     wgpu::Limits limits = wgpu::Default;
 
 #ifdef WEBGPU_BACKEND_DAWN
@@ -112,6 +89,21 @@ void inspectDevice(wgpu::Device device) {
         std::cout << " - maxTextureDimension2D: " << limits.maxTextureDimension2D << std::endl;
         std::cout << " - maxTextureDimension3D: " << limits.maxTextureDimension3D << std::endl;
         std::cout << " - maxTextureArrayLayers: " << limits.maxTextureArrayLayers << std::endl;
+        std::cout << " - maxVertexAttributes:   " << limits.maxVertexAttributes << std::endl;
+        std::cout << " - maxBufferSize:         " << limits.maxBufferSize << std::endl;
+    }
+    std::cout << std::endl;
+
+    // Get device features
+    wgpu::SupportedFeatures features{};
+    device.getFeatures(&features);
+
+    std::cout << "Device features:" << std::endl;
+    std::string feature_name;
+    for (size_t i = 0; i < features.featureCount; i++) {
+        feature_name = magic_enum::enum_name(features.features[i]);
+        if (!feature_name.empty())
+            std::cout << feature_name << std::endl;
     }
     std::cout << std::endl;
 };
