@@ -7,9 +7,9 @@ static constexpr float PI = 3.14159265358979323846f;
 
 namespace config {
 
-    static constexpr size_t initial_width = 640;
+    static constexpr size_t initial_width = 1200;
 
-    static constexpr size_t initial_height = 480;
+    static constexpr size_t initial_height = 900;
 
     static constexpr const char* shapeModelFile = "@RESOURCE_DIR@/fourareen.obj";
 

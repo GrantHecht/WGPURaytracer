@@ -6,10 +6,13 @@
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_LEFT_HANDED
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 
 #include "resource_manager.hpp"
+
+#include <array>
 
 class Application {
 public:
@@ -31,10 +34,17 @@ private:
         glm::mat4x4 viewMatrix;
         glm::mat4x4 modelMatrix;
         glm::vec4 color;
+        glm::vec3 cameraWorldPosition;
         float time;
-        float _pad[3];
+        //float _pad[1];
     };
     static_assert(sizeof(MyUniforms) % 16 == 0);
+
+    struct LightingUniforms {
+        std::array<glm::vec4, 2> directions;
+        std::array<glm::vec4, 2> colors;
+    };
+    static_assert(sizeof(LightingUniforms) % 16 == 0);
 
     struct CameraState {
         glm::vec2 angles = { 0.8f, 0.5f };
@@ -63,6 +73,11 @@ private:
     // Window creation
     void CreateWindow(); 
 
+    // GUI
+    bool InitGui();
+    void TerminateGui();
+    void UpdateGui(wgpu::RenderPassEncoder renderPass);
+
     // Event handling
     void ResizeWindow();
     void MouseMove(double xpos, double ypos);
@@ -87,31 +102,39 @@ private:
 
     // WebGPU rendering
     wgpu::TextureView GetNextSurfaceTextureView();
-
     wgpu::TextureView GetNextDepthTextureView();
 
     // Scene transformation
     void UpdateModelMatrix(float time);
     void UpdateViewMatrix();
     void UpdateProjectionMatrix();
-    MyUniforms GetUniforms(float time);
+    void UpdateMyUniforms();
+
+    // Lighting transforms
+    void UpdateLighting();
 
 private:
     // Window
     GLFWwindow *window;
-    int width, height;
+    int width, height, fbWidth, fbHeight;
 
     // User interaction
     CameraState cameraState;
     DragState dragState;
-    MyUniforms uniforms;
 
     // WebGPU
     wgpu::Device device;
     wgpu::Surface surface;
     wgpu::Queue queue;
 
+    bool myUniformsChanged = false;
+    MyUniforms uniforms;
     wgpu::Buffer uniformBuffer;
+
+    bool lightingUniformsChanged = false;
+    LightingUniforms lightingUniforms;
+    wgpu::Buffer lightingUniformBuffer;
+
     wgpu::Buffer vertexBuffer;
     uint32_t vertexCount;
 

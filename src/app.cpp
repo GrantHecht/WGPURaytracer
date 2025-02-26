@@ -4,8 +4,13 @@
 
 #include "webgpu_utils.hpp"
 
+#include <glm/gtx/polar_coordinates.hpp>
 #include <glfw3webgpu.h>
 #include <magic_enum/magic_enum.hpp>
+
+#include <imgui.h>
+#include <backends/imgui_impl_wgpu.h>
+#include <backends/imgui_impl_glfw.h>
 
 #include <iostream>
 #include <vector>
@@ -68,6 +73,12 @@ bool Application::Initialize() {
     // Initialize bind group
     InitializeBindGroups();
 
+    // Initialize GUI
+    if (!InitGui()) {
+        std::cerr << "Could not initialize GUI!" << std::endl;
+        return false;
+    }
+
     return true;
 };
 
@@ -81,22 +92,27 @@ void Application::Terminate() {
     sampler.release();
     depthTexture.release();
     uniformBuffer.release();
+    lightingUniformBuffer.release();
     vertexBuffer.release();
     surface.unconfigure();
     surface.release();
     queue.release();
     device.release();
+    TerminateGui();
     glfwDestroyWindow(window);
     glfwTerminate();
 };
 
 void Application::MainLoop() {
-    UpdateDragInertia();
     glfwPollEvents();
+    UpdateDragInertia();
 
     // Update uniform buffer
-    UpdateModelMatrix(glfwGetTime());
-    queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
+    //UpdateModelMatrix(glfwGetTime());
+    UpdateMyUniforms();
+
+    // Update lighting uniform buffer
+    UpdateLighting();
 
     // Get texture view
     auto targetView = GetNextSurfaceTextureView();
@@ -152,6 +168,9 @@ void Application::MainLoop() {
     renderPass.setBindGroup(0, bindGroup, 0, nullptr);
 
     renderPass.draw(vertexCount, 1, 0, 0);
+    
+    // Update the GUI
+    UpdateGui(renderPass);
 
     renderPass.end();
     renderPass.release();
@@ -182,12 +201,17 @@ bool Application::IsRunning() {
 };
 
 void Application::CreateWindow() {
+    // Set initial window size
+    width  = config::initial_width;
+    height = config::initial_height;
+
     // Create the window
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // <-- extra info for glfwCreateWindow
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-    width  = config::initial_width;
-    height = config::initial_height;
     window = glfwCreateWindow(width, height, "WebGPU", nullptr, nullptr);
+
+    // Get the framebuffer size
+    glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
 
     // Set the window user pointer
     glfwSetWindowUserPointer(window, this);
@@ -212,13 +236,19 @@ void Application::CreateWindow() {
 };
 
 void Application::ResizeWindow() {
-    // Get the updated window width and height 
-    glfwGetFramebufferSize(window, &width, &height);
+    // Get the updated window framebuffer width and height 
+    glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+
+    // Make sure we update the width and height 
+    float wscale, hscale;
+    glfwGetWindowContentScale(window, &wscale, &hscale);
+    width = static_cast<int>(fbWidth / wscale);
+    height = static_cast<int>(fbHeight / hscale);
 
     // Re-configure the surface
     wgpu::SurfaceConfiguration config;
-    config.width = static_cast<uint32_t>(width);
-    config.height = static_cast<uint32_t>(height);
+    config.width = static_cast<uint32_t>(fbWidth);
+    config.height = static_cast<uint32_t>(fbHeight);
     config.usage = wgpu::TextureUsage::RenderAttachment;
     config.format = surfaceFormat;
 
@@ -232,7 +262,73 @@ void Application::ResizeWindow() {
     // Recreate the depth texture
     depthTexture.release();
     InitializeDepthTexture();
+
+    ImGui_ImplWGPU_InvalidateDeviceObjects();
+    ImGui_ImplWGPU_CreateDeviceObjects();
 };
+
+bool Application::InitGui() {
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::GetIO();
+
+    // Setup Platform/Renderer bindings
+    ImGui_ImplGlfw_InitForOther(window, true);
+
+    ImGui_ImplWGPU_InitInfo init_info;
+    init_info.Device = device;
+    init_info.NumFramesInFlight = 3;
+    init_info.RenderTargetFormat = surfaceFormat;
+    init_info.DepthStencilFormat = depthTextureFormat;
+    ImGui_ImplWGPU_Init(&init_info);
+    return true;
+};
+
+void Application::TerminateGui() {
+    ImGui_ImplGlfw_Shutdown();
+    ImGui_ImplWGPU_Shutdown();
+
+};
+
+// Move this elseware
+namespace ImGui {
+bool DragDirection(const char* label, glm::vec4& direction) {
+    glm::vec2 angles = glm::degrees(glm::polar(glm::vec3(direction)));
+    bool changed = ImGui::DragFloat2(label, glm::value_ptr(angles));
+    direction = glm::vec4(glm::euclidean(glm::radians(angles)), direction.w);
+    return changed;
+}
+}
+
+void Application::UpdateGui(wgpu::RenderPassEncoder renderPass) {
+    // Start the Dear ImGui frame
+    ImGui_ImplWGPU_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    
+
+    bool changed = false;
+    ImGui::Begin("Lighting");                      
+    changed = ImGui::ColorEdit3("Color #0", glm::value_ptr(lightingUniforms.colors[0])) || changed;
+    changed = ImGui::DragDirection("Direction #0", lightingUniforms.directions[0]) || changed;
+    changed = ImGui::ColorEdit3("Color #1", glm::value_ptr(lightingUniforms.colors[1])) || changed;
+    changed = ImGui::DragDirection("Direction #1", lightingUniforms.directions[1]) || changed;
+    
+    // Uncomment for framerate
+    //ImGuiIO& io = ImGui::GetIO();
+    //ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+
+    ImGui::End();
+    lightingUniformsChanged = changed;
+
+    // Draw the UI
+    ImGui::EndFrame();
+    // Convert the UI to low-level drawing commands
+    ImGui::Render();
+    // Execute low-level drawing commands
+    ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
+}
 
 void Application::MouseMove(double xpos, double ypos) {
     if (dragState.active) {
@@ -251,6 +347,10 @@ void Application::MouseMove(double xpos, double ypos) {
 };
 
 void Application::MouseButton(int button, int action, [[maybe_unused]] int mods) {
+    // Return if mouse is interacting with the GUI
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantCaptureMouse) return;
+
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         switch(action) {
             case GLFW_PRESS:
@@ -332,8 +432,8 @@ void Application::ConfigureSurface(wgpu::Instance instance, wgpu::Adapter adapte
     // Configure surface
     wgpu::SurfaceConfiguration config = {};
     config.nextInChain = nullptr;
-    config.width = static_cast<uint32_t>(width);
-    config.height = static_cast<uint32_t>(height);
+    config.width = static_cast<uint32_t>(fbWidth);
+    config.height = static_cast<uint32_t>(fbHeight);
     config.format = surfaceFormat;
     config.viewFormatCount = 0;
     config.viewFormats = nullptr;
@@ -401,7 +501,21 @@ void Application::InitializeBuffers() {
     UpdateModelMatrix(0.0f);
     UpdateViewMatrix();
     UpdateProjectionMatrix();
-    queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
+    UpdateMyUniforms();
+
+    // Create lighting uniform buffer
+    bufferDesc.size = sizeof(LightingUniforms);
+    bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
+    bufferDesc.mappedAtCreation = false;
+    lightingUniformBuffer = device.createBuffer(bufferDesc);
+
+    // Initial values
+    lightingUniforms.directions[0] = { 0.5f, -0.9f, 0.1f, 0.0f };
+    lightingUniforms.directions[1] = { 0.2f, 0.4f, 0.3f, 0.0f };
+    lightingUniforms.colors[0] = { 1.0f, 0.9f, 0.6f, 1.0f };
+    lightingUniforms.colors[1] = { 0.6f, 0.9f, 1.0f, 1.0f };
+    lightingUniformsChanged = true;
+    UpdateLighting();
 }
 
 void Application::InitializeTextures() {
@@ -434,7 +548,7 @@ void Application::InitializeDepthTexture() {
     textureDesc.mipLevelCount = 1;
     textureDesc.sampleCount = 1;
     textureDesc.dimension = wgpu::TextureDimension::_2D;
-    textureDesc.size = { static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1 };
+    textureDesc.size = { static_cast<uint32_t>(fbWidth), static_cast<uint32_t>(fbHeight), 1 };
     textureDesc.usage = wgpu::TextureUsage::RenderAttachment;
     textureDesc.viewFormatCount = 1;
     textureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
@@ -446,7 +560,7 @@ void Application::InitializePipline() {
     auto shaderModule = ResourceManager::loadShaderModule(config::shaderSrcFile, device);
 
     // Create a bind group layouts
-    std::vector<wgpu::BindGroupLayoutEntry> bindingLayouts(3);
+    std::vector<wgpu::BindGroupLayoutEntry> bindingLayouts(4);
     // === Uniform buffer binding
     wgpu::BindGroupLayoutEntry& uniformBindingLayout = bindingLayouts[0];
     uniformBindingLayout.binding = 0; // the @binding index used in the shader
@@ -467,6 +581,13 @@ void Application::InitializePipline() {
     samplerBindingLayout.visibility = wgpu::ShaderStage::Fragment;
     samplerBindingLayout.sampler.type = wgpu::SamplerBindingType::Filtering;
 
+    // === Lighting uniforms buffer binding
+    wgpu::BindGroupLayoutEntry& lightingUniformBindingLayout = bindingLayouts[3];
+    lightingUniformBindingLayout.binding = 3; // the @binding index used in the shader
+    lightingUniformBindingLayout.visibility = wgpu::ShaderStage::Fragment;
+    lightingUniformBindingLayout.buffer.type = wgpu::BufferBindingType::Uniform;
+    lightingUniformBindingLayout.buffer.minBindingSize = sizeof(LightingUniforms);
+
     wgpu::BindGroupLayoutDescriptor bindGroupLayoutDesc{};
     bindGroupLayoutDesc.entryCount = (uint32_t)bindingLayouts.size();
     bindGroupLayoutDesc.entries = bindingLayouts.data();
@@ -474,6 +595,7 @@ void Application::InitializePipline() {
 
     // Create a pipeline layout
     wgpu::PipelineLayoutDescriptor pipelineLayoutDesc;
+    pipelineLayoutDesc.label = "My pipeline layout"_wgpu;
     pipelineLayoutDesc.bindGroupLayoutCount = 1;
     pipelineLayoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&bindGroupLayout;
     pipelineLayout = device.createPipelineLayout(pipelineLayoutDesc);
@@ -564,7 +686,7 @@ void Application::InitializePipline() {
 }
 
 void Application::InitializeBindGroups() {
-    std::vector<wgpu::BindGroupEntry> bindings(3);
+    std::vector<wgpu::BindGroupEntry> bindings(4);
 
     bindings[0].binding = 0; // the @binding index used in the shader
     bindings[0].buffer = uniformBuffer;
@@ -576,6 +698,11 @@ void Application::InitializeBindGroups() {
 
     bindings[2].binding = 2; // the @binding index used in the shader
     bindings[2].sampler = sampler;
+
+    bindings[3].binding = 3;
+    bindings[3].buffer = lightingUniformBuffer;
+    bindings[3].offset = 0;
+    bindings[3].size = sizeof(LightingUniforms);
 
     wgpu::BindGroupDescriptor bindGroupDesc;
     bindGroupDesc.label = "My bind group"_wgpu;
@@ -599,11 +726,13 @@ wgpu::Limits Application::GetRequiredLimits(wgpu::Adapter adapter) {
     requiredLimits.maxBufferSize = 1000000 * sizeof(VertexAttributes);
     requiredLimits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 
-    requiredLimits.maxInterStageShaderVariables = 8;
+    requiredLimits.maxInterStageShaderVariables = 11;
 
-    requiredLimits.maxBindGroups = 1;
+    requiredLimits.maxBindGroups = 2;
+    requiredLimits.maxBindingsPerBindGroup = supportedLimits.maxBindingsPerBindGroup;
+    requiredLimits.maxDynamicUniformBuffersPerPipelineLayout = supportedLimits.maxDynamicUniformBuffersPerPipelineLayout;
 
-    requiredLimits.maxUniformBuffersPerShaderStage = 1;
+    requiredLimits.maxUniformBuffersPerShaderStage = 2;
     requiredLimits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 
     requiredLimits.maxTextureDimension1D = supportedLimits.maxTextureDimension1D;
@@ -671,8 +800,9 @@ void Application::UpdateViewMatrix() {
     float sx = glm::sin(cameraState.angles.x);
     float sy = glm::sin(cameraState.angles.y);
 
-    glm::vec3 position = glm::vec3(cx * cy, sx * cy, sy) * std::exp(-cameraState.zoom);
-    uniforms.viewMatrix = glm::lookAt(position, glm::vec3(0.0f), glm::vec3(0, 0, 1));
+    uniforms.cameraWorldPosition = glm::vec3(cx * cy, sx * cy, sy) * std::exp(-cameraState.zoom);
+    uniforms.viewMatrix = glm::lookAt(uniforms.cameraWorldPosition, glm::vec3(0.0f), glm::vec3(0, 0, 1));
+    myUniformsChanged = true;
 }
 
 void Application::UpdateModelMatrix(float time) {
@@ -684,6 +814,7 @@ void Application::UpdateModelMatrix(float time) {
     uniforms.modelMatrix = M;
 
     uniforms.modelMatrix = glm::mat4x4(1.0);
+    myUniformsChanged = true;
 }
 
 void Application::UpdateProjectionMatrix() {
@@ -695,4 +826,19 @@ void Application::UpdateProjectionMatrix() {
     uniforms.projectionMatrix = glm::perspective(fov, ratio, near, far);
 
     uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
+    myUniformsChanged = true;
+}
+
+void Application::UpdateMyUniforms() {
+    if (myUniformsChanged){
+        queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
+        myUniformsChanged = false;
+    }
+}
+
+void Application::UpdateLighting() {
+    if (lightingUniformsChanged) {
+        queue.writeBuffer(lightingUniformBuffer, 0, &lightingUniforms, sizeof(LightingUniforms));
+        lightingUniformsChanged = false;
+    }
 }
